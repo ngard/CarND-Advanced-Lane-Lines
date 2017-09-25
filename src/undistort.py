@@ -1,8 +1,6 @@
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 
 nx = 6#TODO: enter the number of inside corners in x
 ny = 9#TODO: enter the number of inside corners in y
