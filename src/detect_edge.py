@@ -30,8 +30,7 @@ def calc_transform_matrix(src,dst):
     return cv2.getPerspectiveTransform(src,dst)
 
 def warp_image(img,M):
-    img_size = (img.shape[1], img.shape[0])
-    return cv2.warpPerspective(img,M,img_size)
+    return cv2.warpPerspective(img,M,img.shape[1::-1])
 
 def grayscale_image(img):
     return cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
@@ -79,22 +78,12 @@ def binary_white_or_yellow(img_warped):
     yw_binary[(yellow_binary==255) | (white_binary==255)] = 255
     return yw_binary
 
-def mix_binary_images(img_binary_edge, img_binary_saturation):
-    assert img_binary_edge.size == img_binary_saturation.size
-    return np.dstack((np.zeros_like(img_binary_saturation), img_binary_edge, img_binary_saturation))
-
-def mix_binary_images_3(img_binary_edge, img_binary_saturation, img_binary_color):
+def mix_binary_images(img_binary_edge, img_binary_saturation, img_binary_color):
     assert img_binary_edge.size == img_binary_saturation.size
     assert img_binary_edge.size == img_binary_color.size
     return np.dstack((img_binary_color, img_binary_edge, img_binary_saturation))
 
-def combine_binary_images(img_binary_edge, img_binary_saturation):
-    assert img_binary_edge.size == img_binary_saturation.size
-    combined_binary = np.zeros_like(img_binary_edge)
-    combined_binary[(img_binary_edge == 255) & (img_binary_saturation == 255)] = 255
-    return combined_binary
-
-def combine_binary_images_3(img_binary_edge, img_binary_saturation, img_binary_white_or_yellow):
+def combine_binary_images(img_binary_edge, img_binary_saturation, img_binary_white_or_yellow):
     assert img_binary_edge.size == img_binary_saturation.size
     assert img_binary_edge.size == img_binary_white_or_yellow.size
     combined_binary = np.zeros_like(img_binary_edge)
@@ -102,18 +91,6 @@ def combine_binary_images_3(img_binary_edge, img_binary_saturation, img_binary_w
                     (img_binary_saturation == 255) &
                     (img_binary_white_or_yellow == 255)] = 255
     return combined_binary
-
-def undistort_test_images():
-    generator_image = read_images("../test_images/")
-    target_dir = "../test_images/undistorted/"
-    mkdir_if_not_exists(target_dir)
-    for (img, fname) in generator_image:
-        cv2.imshow("",img)
-        cv2.waitKey(200)
-        img_undist = undistort_image(img,mtx,dist)
-        cv2.imwrite(target_dir+fname,img_undist)
-        cv2.imshow("",img_undist)
-        cv2.waitKey(400)
 
 def undistort_and_warp_test_images(M):
     generator_image = read_images("../test_images/")
@@ -126,57 +103,22 @@ def undistort_and_warp_test_images(M):
         cv2.imshow("",img_warped)
         cv2.waitKey(500)
 
-def undistort_and_warp_and_detect_edge_on_test_images(M):
-    generator_image = read_images("../test_images/")
-    target_dir_edge = "../test_images/edge/"
-    target_dir_saturation = "../test_images/saturation/"
-    target_dir_mix = "../test_images/mix/"
-    mkdir_if_not_exists(target_dir_edge)
-    mkdir_if_not_exists(target_dir_saturation)
-    mkdir_if_not_exists(target_dir_mix)
-    for (img, fname) in generator_image:
-        img_undist = undistort_image(img,mtx,dist)
-        img_warped = warp_image(img_undist,M)
-        img_warped_gray = grayscale_image(img_warped)
-        img_warped_edge = detect_edge(img_warped_gray)
-        img_binary_edge = binary_edge(img_warped_edge)
-        cv2.imwrite(target_dir_edge+fname,img_warped_edge)
-        
-        img_warped_saturation = saturation_image(img_warped)
-        img_binary_saturation = binary_saturation(img_warped_saturation)
-        cv2.imwrite(target_dir_saturation+fname,img_binary_saturation)
-
-        img_mix = mix_binary_images(img_binary_edge,img_binary_saturation)
-        cv2.imwrite(target_dir_mix+fname,img_mix)
-
 def undistort_and_warp_and_detect_edge_on_movie(M,movie_path=""):
     for img_original in read_movie(movie_path):
         img_undist = undistort_image(img_original,mtx,dist)
         img_warped = warp_image(img_undist,M)
+
         img_warped_gray = grayscale_image(img_warped)
         img_warped_edge = detect_edge(img_warped_gray)
         img_binary_edge = binary_edge(img_warped_edge)
-        
         img_warped_saturation = saturation_image(img_warped)
         img_binary_saturation = binary_saturation(img_warped_saturation)
-
         img_binary_white_or_yellow = binary_white_or_yellow(img_warped)
-
-        #img_mix = mix_binary_images(img_binary_edge,img_binary_saturation)
-        img_mix = mix_binary_images_3(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
-        img_combined = combine_binary_images(img_binary_edge,img_binary_saturation)
-        #img_combined = combine_binary_images_3(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
+        
+        img_mix = mix_binary_images(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
+        img_combined = combine_binary_images(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
         yield img_original, img_warped, img_mix, img_combined
         
-def show_lane_on_movie(M,movie_path):
-    for img_original, img_warped, img_mix, img_combined in undistort_and_warp_and_detect_edge_on_movie(M,movie_path):
-        cv2.imshow("original",img_original)
-        cv2.imshow("warped",img_warped)
-        cv2.imshow("mix",img_mix)
-        cv2.imshow("combined",img_combined)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
 def make_sliding_window(binary_warped):
     # Assuming you have created a warped binary image called "binary_warped"
     # Take a histogram of the bottom half of the image
@@ -310,8 +252,49 @@ def fit_line(binary_warped, left_fit, right_fit):
     cv2.polylines(window_img, [right_line_pts], False, (255,255,255),1)
     result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
     return result, left_fit, right_fit
+
+def calc_curvature(left_fit, right_fit, y_eval):
+    # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 10./160 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
     
-def show_sliding_window_on_movie(M,movie_path):
+    # Fit new polynomials to x,y in world space 
+    ploty = np.linspace(0, y_eval-1, y_eval )
+    leftx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    rightx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+    left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
+    # Calculate the new radii of curvature
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+    # Now our radius of curvature is in meters
+    print(left_curverad, 'm', right_curverad, 'm')
+    return left_curverad, right_curverad
+
+def overlay_lane(img_original, Minv, left_fit, right_fit):
+    y_eval = img_original.shape[0]
+    ploty = np.linspace(0, y_eval-1, y_eval)
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]    
+    
+    # Create an image to draw the lines on
+    warped_fill_lane = np.zeros_like(img_original).astype(np.uint8)
+    
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(warped_fill_lane, np.int_([pts]), (0,255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    img_fill_lane = cv2.warpPerspective(warped_fill_lane, Minv, img_original.shape[1::-1])
+    # Combine the result with the original image
+    return cv2.addWeighted(img_original, 1, img_fill_lane, 0.3, 0)
+
+def show_lane_on_movie(M,Minv,movie_path):
     is_first = True
     left_fit = 0
     right_fit = 0
@@ -328,28 +311,23 @@ def show_sliding_window_on_movie(M,movie_path):
             cv2.imshow("sw",img)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
+        left_R, right_R= calc_curvature(left_fit,right_fit,img.shape[0])
+        img_overlay = overlay_lane(img_original,Minv,left_fit,right_fit)
+        cv2.imshow("overlay",img_overlay)
         
 mtx = np.load("matrix.npy")
 dist = np.load("distortion_coeffs.npy")
 print(mtx,dist)
 
-#undistort_test_images()
-
 src = np.float32([[598,450],[685,450],[280,680],[1050,680]])
 dst = np.float32([[300,0],[1000,0],[300,720],[1000,720]])
 #dst = np.float32([[300,0],[1000,0],[300,1000],[1000,1000]])
 M = calc_transform_matrix(src,dst)
-
-#undistort_and_warp_test_images(M)
-
-#undistort_and_warp_and_detect_edge_on_test_images(M)
+Minv = calc_transform_matrix(dst,src)
 
 video = "../project_video.mp4"
 #video = "../challenge_video.mp4"
 
-#show_lane_on_movie(M,video)
-
-show_sliding_window_on_movie(M,video)
+show_lane_on_movie(M,Minv,video)
 
 cv2.destroyAllWindows()
