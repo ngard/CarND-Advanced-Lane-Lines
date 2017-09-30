@@ -21,12 +21,12 @@ The goals / steps of this project are the following:
 
 [image0]: ./camera_cal/calibration3.jpg "Original Chessboard Pattern"
 [image1]: ./output_images/undistort/calibration3.jpg "Undistorted Chessboard Pattern"
-[image2]: ./test_images/test1.jpg "Road Transformed"
+[image2]: ./output_images/lane/00015_undist.png "Road Transformed"
 [image3]: ./examples/binary_combo_example.jpg "Binary Example"
 [image4]: ./examples/warped_straight_lines.jpg "Warp Example"
 [image5]: ./examples/color_fit_lines.jpg "Fit Visual"
 [image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[video1]: ./output_images/lane_overlay.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -61,10 +61,17 @@ The result is shown as below:
 
 ### Pipeline (single images)
 
+For this project, I made a pipeline which is not followed to instruction.
+
+At the first step, I transformed the images to birds-eye view.
+Then, I applied filters to detect lane markers.
+
+Therefore, my steps does not meet to the Project Rublic at some points, however, I finally succeeded to find lanes.
+
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+![An example of undistorted image][image2]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
