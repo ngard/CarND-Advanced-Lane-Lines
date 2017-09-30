@@ -1,6 +1,14 @@
 import os, cv2
 import numpy as np
 
+# Define Max Curve Radius
+kMaxCurveR = 3000
+# Define conversions in x and y from pixels space to meters
+kMeterPerPixelY = 10./160 # meters per pixel in y dimension
+kMeterPerPixelX = 3.7/700 # meters per pixel in x dimension
+
+kWeightPrevCycle = 1000
+
 def read_images(image_dir):
     fname_images = os.listdir(image_dir)
     for fname_image in fname_images:
@@ -43,20 +51,8 @@ def detect_edge(img_gray):
     sobelx = cv2.Sobel(img_gray, cv2.CV_64F, 1, 0)
     return np.absolute(sobelx)
 
-def binary_edge(img_edge):
-    threashold_min = 5
-    sxbinary = np.zeros_like(img_edge)
-    sxbinary[img_edge >= threashold_min] = 255
-    return sxbinary
-
-def binary_saturation(img_saturation):
-    threashold_min = 11
-    s_binary = np.zeros_like(img_saturation)
-    s_binary[(img_saturation >= threashold_min)] = 255
-    return s_binary
-
 def binary_white(img_warped):
-    threashold_min = 255/2
+    threashold_min = 150
     white_binary = np.zeros_like(img_warped[:,:,0])
     white_binary[(img_warped[:,:,0] >= threashold_min) &
                  (img_warped[:,:,1] >= threashold_min) &
@@ -78,19 +74,31 @@ def binary_white_or_yellow(img_warped):
     yw_binary[(yellow_binary==255) | (white_binary==255)] = 255
     return yw_binary
 
-def mix_binary_images(img_binary_edge, img_binary_saturation, img_binary_color):
-    assert img_binary_edge.size == img_binary_saturation.size
-    assert img_binary_edge.size == img_binary_color.size
-    return np.dstack((img_binary_color, img_binary_edge, img_binary_saturation))
+def mix_images(img_edge, img_saturation, img_binary_color):
+    assert img_edge.size == img_saturation.size
+    assert img_edge.size == img_binary_color.size
 
-def combine_binary_images(img_binary_edge, img_binary_saturation, img_binary_white_or_yellow):
-    assert img_binary_edge.size == img_binary_saturation.size
-    assert img_binary_edge.size == img_binary_white_or_yellow.size
-    combined_binary = np.zeros_like(img_binary_edge)
-    combined_binary[(img_binary_edge == 255) &
-                    (img_binary_saturation == 255) &
-                    (img_binary_white_or_yellow == 255)] = 255
-    return combined_binary
+    height_img = img_edge.shape[0]
+    for row in range(height_img):
+        img_edge[row] = img_edge[row] * (height_img-row)
+
+    img_normalized_edge = np.zeros_like(img_edge)
+    img_normalized_saturation = np.zeros_like(img_edge)
+    
+    img_normalized_edge = cv2.normalize(img_edge, img_normalized_edge, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_8U)
+    img_normalized_saturation = cv2.normalize(img_saturation, img_normalized_saturation,alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_8U)
+
+    return np.dstack((img_binary_color/10, img_normalized_edge, img_normalized_saturation))
+
+def combine_images(img_edge, img_saturation, img_binary_color):
+    assert img_edge.size == img_saturation.size
+    assert img_edge.size == img_binary_color.size
+
+    img_mix = mix_images(img_edge, img_saturation, img_binary_color)
+    img_combined = np.zeros_like(img_binary_color)
+    img_combined = img_mix[:,:,0]*img_mix[:,:,1]*img_mix[:,:,2]
+    #ret, img_combined = cv2.threshold(img_combined,30,255,cv2.THRESH_TOZERO)
+    return img_combined
 
 def undistort_and_warp_test_images(M):
     generator_image = read_images("../test_images/")
@@ -110,13 +118,11 @@ def undistort_and_warp_and_detect_edge_on_movie(M,movie_path=""):
 
         img_warped_gray = grayscale_image(img_warped)
         img_warped_edge = detect_edge(img_warped_gray)
-        img_binary_edge = binary_edge(img_warped_edge)
         img_warped_saturation = saturation_image(img_warped)
-        img_binary_saturation = binary_saturation(img_warped_saturation)
         img_binary_white_or_yellow = binary_white_or_yellow(img_warped)
         
-        img_mix = mix_binary_images(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
-        img_combined = combine_binary_images(img_binary_edge,img_binary_saturation,img_binary_white_or_yellow)
+        img_mix = mix_images(img_warped_edge,img_warped_saturation,img_binary_white_or_yellow)
+        img_combined = combine_images(img_warped_edge,img_warped_saturation,img_binary_white_or_yellow)
         yield img_original, img_warped, img_mix, img_combined
         
 def make_sliding_window(binary_warped):
@@ -132,7 +138,7 @@ def make_sliding_window(binary_warped):
     rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
     # Choose the number of sliding windows
-    nwindows = 10
+    nwindows = 9
     # Set height of windows
     window_height = np.int(binary_warped.shape[0]/nwindows)
     # Identify the x and y positions of all nonzero pixels in the image
@@ -219,14 +225,36 @@ def fit_line(binary_warped, left_fit, right_fit):
     lefty = nonzeroy[left_lane_inds]
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
+    leftw = []
+    rightw = []
+    for (x,y) in zip(leftx,lefty):        
+        leftw.append(binary_warped[y,x])
+    for (x,y) in zip(rightx,righty):
+        rightw.append(binary_warped[y,x])
+
+    # Plot Points from Previous Cycle Result
+    height_img = binary_warped.shape[0]
+    ploty = np.linspace(0, height_img-1, height_img)
+    left_fitx_prev = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx_prev = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]    
+    left_weight_prev = np.ones_like(left_fitx_prev)*kWeightPrevCycle
+    right_weight_prev = np.ones_like(right_fitx_prev)*kWeightPrevCycle
+    
+    leftx = np.hstack((leftx,left_fitx_prev))
+    rightx = np.hstack((rightx,right_fitx_prev))
+    lefty = np.hstack((lefty,ploty))
+    righty = np.hstack((righty,ploty))
+    leftw = np.hstack((leftw,left_weight_prev))
+    rightw = np.hstack((rightw,right_weight_prev))
+
     # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
+    left_fit = np.polyfit(lefty, leftx, 2, w=leftw)
+    right_fit = np.polyfit(righty, rightx, 2, w=rightw)
     # Generate x and y values for plotting
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
+    
     # Create an image to draw on and an image to show the selection window
     out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
     window_img = np.zeros_like(out_img)
@@ -250,27 +278,59 @@ def fit_line(binary_warped, left_fit, right_fit):
     right_line_pts = np.array(zip(right_fitx, ploty), np.int32)
     cv2.polylines(window_img, [left_line_pts], False, (255,255,255),1)
     cv2.polylines(window_img, [right_line_pts], False, (255,255,255),1)
+
     result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+    
     return result, left_fit, right_fit
 
-def calc_curvature(left_fit, right_fit, y_eval):
-    # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 10./160 # meters per pixel in y dimension
-    xm_per_pix = 3.7/700 # meters per pixel in x dimension
-    
+def calc_curvature(left_fit, right_fit, y_eval):    
     # Fit new polynomials to x,y in world space 
     ploty = np.linspace(0, y_eval-1, y_eval )
     leftx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     rightx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-    left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
+    left_fit_cr = np.polyfit(ploty*kMeterPerPixelY, leftx*kMeterPerPixelX, 2)
+    right_fit_cr = np.polyfit(ploty*kMeterPerPixelY, rightx*kMeterPerPixelX, 2)
     # Calculate the new radii of curvature
-    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+    left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*kMeterPerPixelY + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+    right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*kMeterPerPixelY + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
     # Now our radius of curvature is in meters
-    print(left_curverad, 'm', right_curverad, 'm')
+    left_curverad = kMaxCurveR if left_curverad > kMaxCurveR else left_curverad
+    right_curverad = kMaxCurveR if right_curverad > kMaxCurveR else right_curverad
+
+    # Curve to Left gets negative radius and Curve to Right gets positive radius
+    left_curverad = left_curverad if left_fit_cr[0] < 0 else -left_curverad
+    right_curverad = right_curverad if right_fit_cr[0] < 0 else -right_curverad
+    
     return left_curverad, right_curverad
+
+def calc_offset(left_fit, right_fit, shape_img):
+    height_img = shape_img[0]
+    width_img = shape_img[1]
+    offset_left = left_fit[0]*height_img**2 + left_fit[1]*height_img + left_fit[2]
+    offset_right = right_fit[0]*height_img**2 + right_fit[1]*height_img + right_fit[2]
+    offset_center = ((offset_left+offset_right)/2 - width_img/2)*kMeterPerPixelX
+    return offset_center
+
+def overlay_curvature(img_original, left_curverad, right_curverad, offset_center, confidence):
+    assert type(confidence) == bool
+    is_straight = False
+    #curverad = (left_curverad+right_curverad)/2
+    curverad_inv = ((1./left_curverad + 1./right_curverad)/2)
+    if (curverad_inv <= 1./kMaxCurveR and curverad_inv >= -1./kMaxCurveR):
+        is_straight = True
+    if not is_straight:
+        curverad = 1./curverad_inv
+    text_curvature = "Curvature:  Straight" if (is_straight) else "Curvature:%5.0f[m] "%(abs(curverad))
+    if not is_straight:
+        text_curvature += "(Right)" if curverad < 0 else "(Left)"
+
+    text_color = (0,0,0)
+    cv2.putText(img_original,text_curvature,(100,100),cv2.FONT_HERSHEY_SIMPLEX,1.5,text_color)
+    text_offset = "Offset:%4.2f[m] "%abs(offset_center)
+    text_offset += "(Right)" if offset_center < 0 else "(Left)"
+    cv2.putText(img_original,text_offset,(100,200),cv2.FONT_HERSHEY_SIMPLEX,1.5,text_color)
 
 def overlay_lane(img_original, Minv, left_fit, right_fit):
     y_eval = img_original.shape[0]
@@ -312,21 +372,24 @@ def show_lane_on_movie(M,Minv,movie_path):
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
         left_R, right_R= calc_curvature(left_fit,right_fit,img.shape[0])
+        offset_center = calc_offset(left_fit,right_fit,img.shape)
+        overlay_curvature(img_original,left_R,right_R,offset_center,True)
         img_overlay = overlay_lane(img_original,Minv,left_fit,right_fit)
         cv2.imshow("overlay",img_overlay)
         
 mtx = np.load("matrix.npy")
 dist = np.load("distortion_coeffs.npy")
-print(mtx,dist)
+print("Camera Matrix",mtx)
+print("Distortion Coeffs",dist)
 
 src = np.float32([[598,450],[685,450],[280,680],[1050,680]])
-dst = np.float32([[300,0],[1000,0],[300,720],[1000,720]])
-#dst = np.float32([[300,0],[1000,0],[300,1000],[1000,1000]])
+dst = np.float32([[280,0],[1000,0],[280,720],[1000,720]])
 M = calc_transform_matrix(src,dst)
 Minv = calc_transform_matrix(dst,src)
 
 video = "../project_video.mp4"
 #video = "../challenge_video.mp4"
+#video = "../harder_challenge_video.mp4"
 
 show_lane_on_movie(M,Minv,video)
 
