@@ -29,11 +29,11 @@ def read_movie(movie_path):
 def mkdir_if_not_exists(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
-        
+
 def undistort_image(img, mtx, dist):
     # Use the OpenCV undistort() function to remove distortion
     return cv2.undistort(img, mtx, dist, None, mtx)
-        
+
 def calc_transform_matrix(src,dst):
     return cv2.getPerspectiveTransform(src,dst)
 
@@ -84,7 +84,7 @@ def mix_images(img_edge, img_saturation, img_binary_color):
 
     img_normalized_edge = np.zeros_like(img_edge)
     img_normalized_saturation = np.zeros_like(img_edge)
-    
+
     img_normalized_edge = cv2.normalize(img_edge, img_normalized_edge, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_8U)
     img_normalized_saturation = cv2.normalize(img_saturation, img_normalized_saturation,alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_8U)
 
@@ -120,11 +120,11 @@ def undistort_and_warp_and_detect_edge_on_movie(M,movie_path=""):
         img_warped_edge = detect_edge(img_warped_gray)
         img_warped_saturation = saturation_image(img_warped)
         img_binary_white_or_yellow = binary_white_or_yellow(img_warped)
-        
+
         img_mix = mix_images(img_warped_edge,img_warped_saturation,img_binary_white_or_yellow)
         img_combined = combine_images(img_warped_edge,img_warped_saturation,img_binary_white_or_yellow)
         yield img_original, img_undist, img_warped, img_mix, img_combined
-        
+
 def make_sliding_window(binary_warped):
     # Assuming you have created a warped binary image called "binary_warped"
     # Take a histogram of the bottom half of the image
@@ -227,7 +227,7 @@ def fit_line(binary_warped, left_fit, right_fit):
     righty = nonzeroy[right_lane_inds]
     leftw = []
     rightw = []
-    for (x,y) in zip(leftx,lefty):        
+    for (x,y) in zip(leftx,lefty):
         leftw.append(binary_warped[y,x])
     for (x,y) in zip(rightx,righty):
         rightw.append(binary_warped[y,x])
@@ -236,10 +236,10 @@ def fit_line(binary_warped, left_fit, right_fit):
     height_img = binary_warped.shape[0]
     ploty = np.linspace(0, height_img-1, height_img)
     left_fitx_prev = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx_prev = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]    
+    right_fitx_prev = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
     left_weight_prev = np.ones_like(left_fitx_prev)*kWeightPrevCycle
     right_weight_prev = np.ones_like(right_fitx_prev)*kWeightPrevCycle
-    
+
     leftx = np.hstack((leftx,left_fitx_prev))
     rightx = np.hstack((rightx,right_fitx_prev))
     lefty = np.hstack((lefty,ploty))
@@ -254,7 +254,7 @@ def fit_line(binary_warped, left_fit, right_fit):
     ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-    
+
     # Create an image to draw on and an image to show the selection window
     out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
     window_img = np.zeros_like(out_img)
@@ -280,11 +280,11 @@ def fit_line(binary_warped, left_fit, right_fit):
     cv2.polylines(window_img, [right_line_pts], False, (255,255,255),1)
 
     result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-    
+
     return result, left_fit, right_fit
 
-def calc_curvature(left_fit, right_fit, y_eval):    
-    # Fit new polynomials to x,y in world space 
+def calc_curvature(left_fit, right_fit, y_eval):
+    # Fit new polynomials to x,y in world space
     ploty = np.linspace(0, y_eval-1, y_eval )
     leftx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
     rightx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
@@ -302,7 +302,7 @@ def calc_curvature(left_fit, right_fit, y_eval):
     # Curve to Left gets negative radius and Curve to Right gets positive radius
     left_curverad = left_curverad if left_fit_cr[0] < 0 else -left_curverad
     right_curverad = right_curverad if right_fit_cr[0] < 0 else -right_curverad
-    
+
     return left_curverad, right_curverad
 
 def calc_offset(left_fit, right_fit, shape_img):
@@ -313,7 +313,7 @@ def calc_offset(left_fit, right_fit, shape_img):
     offset_center = ((offset_left+offset_right)/2 - width_img/2)*kMeterPerPixelX
     return offset_center
 
-def overlay_curvature(img_original, left_curverad, right_curverad, offset_center, confidence):
+def overlay_curvature_and_offset(img_original, left_curverad, right_curverad, offset_center, confidence):
     assert type(confidence) == bool
     is_straight = False
     #curverad = (left_curverad+right_curverad)/2
@@ -336,11 +336,11 @@ def overlay_lane(img_original, Minv, left_fit, right_fit):
     y_eval = img_original.shape[0]
     ploty = np.linspace(0, y_eval-1, y_eval)
     left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]    
-    
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
     # Create an image to draw the lines on
     warped_fill_lane = np.zeros_like(img_original).astype(np.uint8)
-    
+
     # Recast the x and y points into usable format for cv2.fillPoly()
     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
     pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
@@ -355,7 +355,7 @@ def overlay_lane(img_original, Minv, left_fit, right_fit):
     return cv2.addWeighted(img_original, 1, img_fill_lane, 0.3, 0)
 
 is_write_out_images = False
-is_write_out_movie = True
+is_write_out_movie = False
 
 def show_lane_on_movie(M,Minv,movie_path):
     is_first = True
@@ -367,7 +367,7 @@ def show_lane_on_movie(M,Minv,movie_path):
         # Define the codec and create VideoWriter object
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         video_writer = cv2.VideoWriter('lane_overlay.avi',fourcc, 20.0, (1280,720))
-    
+
     for img_original, img_undist, img_warped, img_mix, img_combined in undistort_and_warp_and_detect_edge_on_movie(M,movie_path):
         cv2.imshow("original",img_original)
         if is_write_out_images:
@@ -376,22 +376,24 @@ def show_lane_on_movie(M,Minv,movie_path):
         cv2.imshow("warped",img_warped)
         cv2.imshow("mix",img_mix)
         if is_first:
-            img, left_fit, right_fit = make_sliding_window(img_combined)
-            cv2.imshow("sw",img)
+            img_line, left_fit_line, right_fit_line = make_sliding_window(img_combined)
+            cv2.imshow("fit_line",img_line)
             is_first = False
         else:
-            img, left_fit, right_fit = fit_line(img_combined, left_fit, right_fit)
-            cv2.imshow("sw",img)
+            img_line, left_fit_line, right_fit_line = fit_line(img_combined, left_fit_line, right_fit_line)
+            cv2.imshow("fit_line",img)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-        left_R, right_R= calc_curvature(left_fit,right_fit,img.shape[0])
-        offset_center = calc_offset(left_fit,right_fit,img.shape)
-        overlay_curvature(img_original,left_R,right_R,offset_center,True)
-        img_overlay = overlay_lane(img_original,Minv,left_fit,right_fit)
+        left_R, right_R = calc_curvature(left_fit_line,right_fit_line,img_line.shape[0])
+        offset_center = calc_offset(left_fit_line,right_fit_line,img.shape)
+        overlay_curvature_and_offset(img_original,left_R,right_R,offset_center,True)
+        img_overlay = overlay_lane(img_original,Minv,left_fit_line,right_fit_line)
         cv2.imshow("overlay",img_overlay)
         if is_write_out_images:
             cv2.imwrite("../output_images/lane/%05d_warped.png"%ii_frame,img_warped)
             cv2.imwrite("../output_images/lane/%05d_mix.png"%ii_frame,img_mix)
+            cv2.imwrite("../output_images/lane/%05d_combined.png"%ii_frame,img_combined)
+            cv2.imwrite("../output_images/lane/%05d_line.png"%ii_frame,img_line)
             cv2.imwrite("../output_images/lane/%05d_overlay.png"%ii_frame,img_overlay)
         if is_write_out_movie:
             video_writer.write(img_overlay)
@@ -399,7 +401,7 @@ def show_lane_on_movie(M,Minv,movie_path):
 
     if is_write_out_movie:
         video_writer.release()
-        
+
 mtx = np.load("matrix.npy")
 dist = np.load("distortion_coeffs.npy")
 print("Camera Matrix",mtx)

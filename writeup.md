@@ -22,10 +22,10 @@ The goals / steps of this project are the following:
 [image0]: ./camera_cal/calibration3.jpg "Original Chessboard Pattern"
 [image1]: ./output_images/undistort/calibration3.jpg "Undistorted Chessboard Pattern"
 [image2]: ./output_images/lane/00015_undist.png "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
+[image3]: ./examples/warped_straight_lines.jpg "Warp Example"
+[image4]: ./output_images/lane/00015_mix.png "Filtered Image"
 [image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
+[image6]: ./output_images/lane/00015_overlay.png "Output"
 [video1]: ./output_images/lane_overlay.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -61,67 +61,66 @@ The result is shown as below:
 
 ### Pipeline (single images)
 
-For this project, I made a pipeline which is not followed to instruction.
+For this project, I made a pipeline which does not followed the instruction.
 
-At the first step, I transformed the images to birds-eye view.
-Then, I applied filters to detect lane markers.
+At the first step, I perspective-transformed the images to birds-eye view. Then, I applied filters to detect lane markers.
 
-Therefore, my steps does not meet to the Project Rublic at some points, however, I finally succeeded to find lanes.
+Therefore, my steps does not meet to the Project Rublic at some points (i.e. Requirements No.3 comes before No.2), however, I finally succeeded to find lanes.
 
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
 ![An example of undistorted image][image2]
 
-#### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
-
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
-
-![alt text][image3]
-
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform is realized by 2 steps.
 
-```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
-```
-
-This resulted in the following source and destination points:
+First, I calcurated M, Transform Matrix, using cv2.warpPerspectiveTransform() in `src/detect_lane.py:37 calc_transform_matrix()`.
+The function takes two inputs, source (`src`) and destination (`dst`) points to calcurate the matrix.  I chose the hardcode the source and destination points as follows:
 
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 598, 450      |  280,   0     | 
+| 685, 450      | 1000,   0     |
+| 280, 680      |  280, 720     |
+|1050, 680      | 1000, 720     |
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
+![alt text][image3]
+
+
+#### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+
+For this project, I did not use "binary" image to detect lanes out of images in order to utilize filtered value of each pixel as weight for fitting polynomial lines.
+I used a combination of color (both Saturation and RGB) and gradient thresholds to generate a filtered image (thresholding steps at lines #119 through #125 in `src/detect_lane.py`).  Here's an example of my output for this step. (R shows the strength of Saturation, G shows the strength of Edge and B shows each pixel has white or yellow color.)
+
 ![alt text][image4]
+
+Finally, the product of the 3 channels above (Saturation, Edge and Color) is used to fit polynomial lines.
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+I followed the instructions to fit polynomial lines on to filetered images as using sliding windows to find out lines on the first image and then use look-ahead filter (from #378 to #385 in `src/detect_lane.py`).
+
+For fitting line, I used the value of each pixel in filtered image (`img_combined` in source code) as weight because the bigger the value the more likely the pixel represents the lane.
+
+This works good in some confusing scene when it is hard to distinguish lane markers as below.
 
 ![alt text][image5]
 
+I also implemented low-path-filter by adding points of previous cycle when fitting line (from #235 to #241 in `src/detect_lane.py`) to suppress fluctuation.
+
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+I calcurated the curvature and offset within `calc_curvature()` and `calc_offset()` in `src/detect_lane.py`.
+
+It mostly follows the instruction, however, it uses the sign of curvature as the direction of curvature (left or right) and it limits the outputs upto 3000[m] because the value more than that is not so reliable and the image just looks like straight road then.
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in lines #389 through #390 in my code in `src/detect_line.py` in the function `overlay_curvature_and_offset()` and `overlay_lane()`.  Here is an example of my result on a test image:
 
 ![alt text][image6]
 
@@ -131,7 +130,7 @@ I implemented this step in lines # through # in my code in `yet_another_file.py`
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output_images/lane_overlay.mp4)
 
 ---
 
