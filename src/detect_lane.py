@@ -100,13 +100,24 @@ def combine_images(img_edge, img_saturation, img_binary_color):
     #ret, img_combined = cv2.threshold(img_combined,30,255,cv2.THRESH_TOZERO)
     return img_combined
 
-def undistort_and_warp_test_images(M):
+def undistort_and_warp_test_images(M,src, dst):
     generator_image = read_images("../test_images/")
     for (img, fname) in generator_image:
         img_undist = undistort_image(img,mtx,dist)
-        cv2.imshow("",img_undist)
-        cv2.waitKey(200)
         img_warped = warp_image(img_undist,M)
+        cv2.line(img_undist,(src[0][0],src[0][1]),(src[1][0],src[1][1]),(0,0,255),5)
+        cv2.line(img_undist,(src[1][0],src[1][1]),(src[3][0],src[3][1]),(0,0,255),5)
+        cv2.line(img_undist,(src[3][0],src[3][1]),(src[2][0],src[2][1]),(0,0,255),5)
+        cv2.line(img_undist,(src[2][0],src[2][1]),(src[0][0],src[0][1]),(0,0,255),5)
+
+        cv2.line(img_warped,(dst[0][0],dst[0][1]),(dst[1][0],dst[1][1]),(0,0,255),5)
+        cv2.line(img_warped,(dst[1][0],dst[1][1]),(dst[3][0],dst[3][1]),(0,0,255),5)
+        cv2.line(img_warped,(dst[3][0],dst[3][1]),(dst[2][0],dst[2][1]),(0,0,255),5)
+        cv2.line(img_warped,(dst[2][0],dst[2][1]),(dst[0][0],dst[0][1]),(0,0,255),5)
+
+        cv2.imshow("",img_undist)
+        cv2.imwrite("../test_images/undistorted/"+fname,img_undist)
+        cv2.waitKey(200)
         cv2.imwrite("../test_images/warped/"+fname,img_warped)
         cv2.imshow("",img_warped)
         cv2.waitKey(500)
@@ -276,8 +287,8 @@ def fit_line(binary_warped, left_fit, right_fit):
     cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
     left_line_pts = np.array(zip(left_fitx, ploty), np.int32)
     right_line_pts = np.array(zip(right_fitx, ploty), np.int32)
-    cv2.polylines(window_img, [left_line_pts], False, (255,255,255),1)
-    cv2.polylines(window_img, [right_line_pts], False, (255,255,255),1)
+    cv2.polylines(window_img, [left_line_pts], False, (255,255,255),4)
+    cv2.polylines(window_img, [right_line_pts], False, (255,255,255),4)
 
     result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
 
@@ -381,11 +392,11 @@ def show_lane_on_movie(M,Minv,movie_path):
             is_first = False
         else:
             img_line, left_fit_line, right_fit_line = fit_line(img_combined, left_fit_line, right_fit_line)
-            cv2.imshow("fit_line",img)
+            cv2.imshow("fit_line",img_line)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
         left_R, right_R = calc_curvature(left_fit_line,right_fit_line,img_line.shape[0])
-        offset_center = calc_offset(left_fit_line,right_fit_line,img.shape)
+        offset_center = calc_offset(left_fit_line,right_fit_line,img_line.shape)
         overlay_curvature_and_offset(img_original,left_R,right_R,offset_center,True)
         img_overlay = overlay_lane(img_original,Minv,left_fit_line,right_fit_line)
         cv2.imshow("overlay",img_overlay)
@@ -415,6 +426,8 @@ Minv = calc_transform_matrix(dst,src)
 video = "../project_video.mp4"
 #video = "../challenge_video.mp4"
 #video = "../harder_challenge_video.mp4"
+
+#undistort_and_warp_test_images(M,src,dst)
 
 show_lane_on_movie(M,Minv,video)
 

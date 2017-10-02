@@ -21,11 +21,12 @@ The goals / steps of this project are the following:
 
 [image0]: ./camera_cal/calibration3.jpg "Original Chessboard Pattern"
 [image1]: ./output_images/undistort/calibration3.jpg "Undistorted Chessboard Pattern"
-[image2]: ./output_images/lane/00015_undist.png "Road Transformed"
-[image3]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image4]: ./output_images/lane/00015_mix.png "Filtered Image"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./output_images/lane/00015_overlay.png "Output"
+[image2]: ./output_images/lane/00019_undistort.png "Undistorted Image"
+[image31]: ./output_images/straight_lines1_undistorted.jpg "Road Undistorted"
+[image32]: ./output_images/straight_lines1_warped.jpg "Road Transformed"
+[image4]: ./output_images/lane/00019_mix.png "Filtered Image"
+[image5]: ./output_images/lane/00019_line.png "Fit Line"
+[image6]: ./output_images/lane/00019_overlay.png "Output"
 [video1]: ./output_images/lane_overlay.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -70,6 +71,7 @@ Therefore, my steps does not meet to the Project Rublic at some points (i.e. Req
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+
 ![An example of undistorted image][image2]
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
@@ -88,7 +90,9 @@ The function takes two inputs, source (`src`) and destination (`dst`) points to 
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
-![alt text][image3]
+![An example of undistort image][image31]
+
+![An example of transformed image][image32]
 
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
@@ -96,7 +100,7 @@ I verified that my perspective transform was working as expected by drawing the 
 For this project, I did not use "binary" image to detect lanes out of images in order to utilize filtered value of each pixel as weight for fitting polynomial lines.
 I used a combination of color (both Saturation and RGB) and gradient thresholds to generate a filtered image (thresholding steps at lines #119 through #125 in `src/detect_lane.py`).  Here's an example of my output for this step. (R shows the strength of Saturation, G shows the strength of Edge and B shows each pixel has white or yellow color.)
 
-![alt text][image4]
+![Filtered Image of Lane Lines][image4]
 
 Finally, the product of the 3 channels above (Saturation, Edge and Color) is used to fit polynomial lines.
 
@@ -108,7 +112,7 @@ For fitting line, I used the value of each pixel in filtered image (`img_combine
 
 This works good in some confusing scene when it is hard to distinguish lane markers as below.
 
-![alt text][image5]
+![Result of Polynomial Line Fitting to Filtered Image][image5]
 
 I also implemented low-path-filter by adding points of previous cycle when fitting line (from #235 to #241 in `src/detect_lane.py`) to suppress fluctuation.
 
@@ -122,7 +126,7 @@ It mostly follows the instruction, however, it uses the sign of curvature as the
 
 I implemented this step in lines #389 through #390 in my code in `src/detect_line.py` in the function `overlay_curvature_and_offset()` and `overlay_lane()`.  Here is an example of my result on a test image:
 
-![alt text][image6]
+![Result of Lane Detection][image6]
 
 ---
 
